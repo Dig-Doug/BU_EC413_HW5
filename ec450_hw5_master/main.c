@@ -2,24 +2,6 @@
 
 #include <msp430.h>
 
-void init_spi(void);
-
-void sendByte(unsigned char aData)
-{
-	UCB0TXBUF = aData;
-}
-
-//----------------------------------------------------------------
-
-// ======== Receive interrupt Handler for UCB0 ==========
-
-void interrupt spi_rx_handler(){
-	unsigned char data_received = UCB0RXBUF; // copy data to global variable
-	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
-}
-ISR_VECTOR(spi_rx_handler, ".int07")
-
-
 //Bit positions in P1 for SPI
 #define SPI_CLK 0x20
 #define SPI_SOMI 0x40
@@ -49,6 +31,17 @@ void init_spi(){
 	P1SEL2|=SPI_CLK+SPI_SOMI+SPI_SIMO;
 }
 
+void sendByte(unsigned char aData)
+{
+	UCB0TXBUF = aData;
+}
+
+void interrupt spi_rx_handler(){
+	unsigned char data_received = UCB0RXBUF; // copy data to global variable
+	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
+}
+ISR_VECTOR(spi_rx_handler, ".int07")
+
 void main(){
 
 	WDTCTL = WDTPW + WDTHOLD;       // Stop watchdog timer
@@ -57,8 +50,12 @@ void main(){
 
   	init_spi();
 
-
-
+  	unsigned char counter = 0;
+  	while (1)
+  	{
+  		counter++;
+  	  	sendByte(counter);
+  	}
 
  	_bis_SR_register(GIE+LPM0_bits);
 }

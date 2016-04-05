@@ -2,24 +2,6 @@
 
 #include <msp430.h>
 
-void init_spi(void);
-
-void sendByte(unsigned char aData)
-{
-	UCB0TXBUF = aData;
-}
-
-//----------------------------------------------------------------
-
-// ======== Receive interrupt Handler for UCB0 ==========
-
-void interrupt spi_rx_handler(){
-	unsigned char data_received = UCB0RXBUF; // copy data to global variable
-	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
-}
-ISR_VECTOR(spi_rx_handler, ".int07")
-
-
 //Bit positions in P1 for SPI
 #define SPI_CLK 0x20
 #define SPI_SOMI 0x40
@@ -30,12 +12,13 @@ ISR_VECTOR(spi_rx_handler, ".int07")
 #define BRLO (BIT_RATE_DIVISOR &  0xFF)
 #define BRHI (BIT_RATE_DIVISOR / 0x100)
 
+volatile unsigned char gotData = 0;
+
 void init_spi(){
 	UCB0CTL1 = UCSSEL_2+UCSWRST;  		// Reset state machine; SMCLK source;
 	UCB0CTL0 = UCCKPH					// Data capture on rising edge
 			   							// read data while clock high
 										// lsb first, 8 bit mode,
-			   +UCMST					// master
 			   +UCMODE_0				// 3-pin SPI mode
 			   +UCSYNC;					// sync mode (needed for SPI or I2C)
 	UCB0BR0=BRLO;						// set divisor for bit rate
@@ -48,6 +31,18 @@ void init_spi(){
 	P1SEL |=SPI_CLK+SPI_SOMI+SPI_SIMO;
 	P1SEL2|=SPI_CLK+SPI_SOMI+SPI_SIMO;
 }
+
+void sendByte(unsigned char aData)
+{
+	UCB0TXBUF = aData;
+}
+
+void interrupt spi_rx_handler(){
+	unsigned char data_received = UCB0RXBUF; // copy data to global variable
+	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
+	gotData = data_received;
+}
+ISR_VECTOR(spi_rx_handler, ".int07")
 
 void main(){
 

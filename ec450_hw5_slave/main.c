@@ -1,3 +1,5 @@
+//SLAVE
+
 #include <msp430.h>
 
 void init_spi(void);

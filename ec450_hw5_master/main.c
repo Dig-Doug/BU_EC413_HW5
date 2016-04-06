@@ -1,7 +1,6 @@
 // MASTER
 
 #include <msp430.h>
-#include <time.h>
 #include <stdlib.h>
 
 //Bit positions in P1 for SPI
@@ -14,6 +13,12 @@
 #define BRLO (BIT_RATE_DIVISOR &  0xFF)
 #define BRHI (BIT_RATE_DIVISOR / 0x100)
 
+#define LOW		0
+#define HIGH 	1
+#define BUTTON	BIT3
+
+short lastButtonState = HIGH;
+
 volatile unsigned int answer = 30;
 volatile char state = 0;
 volatile unsigned char lower;
@@ -23,6 +28,22 @@ volatile unsigned char foo;
 void sendByte(unsigned char aData)
 {
 	UCB0TXBUF = aData;
+}
+void init_button(){
+	// Set button as input
+	P1DIR &= ~BUTTON;
+	// Set button to active high
+	P1OUT |= BUTTON;
+	// Activate pullup resistors on button
+	P1REN |= BUTTON;
+}
+
+void init_WDT(){
+	// setup the watchdog timer as an interval timer
+	WDTCTL = WDT_MDLY_8;
+
+	// enable the WDT interrupt (in the system interrupt register IE1)
+	IE1 |= WDTIE;
 }
 
 void init_spi(){
@@ -44,6 +65,28 @@ void init_spi(){
 	P1SEL2|=SPI_CLK+SPI_SOMI+SPI_SIMO;
 }
 
+int genRandom() {
+
+	TA0CTL |= TACLR;            // reset clock
+	TA0CTL = TASSEL_2+ID_0+MC_1;// clock source = SMCLK
+	                            // clock divider=1
+	                            // UP mode
+	                            // timer A interrupt off
+	// compare mode, output mode 0, no interrupt enabled
+	TA0CCTL0=0;
+	TA0CCR0 = -1;
+
+	volatile int i = 0;
+	while (i < 1000) {
+		i++;
+	}
+
+	int result = TAR;
+	TA0CTL |= TACLR;
+
+	return result;
+}
+
 void interrupt spi_rx_handler(){
 	foo = UCB0RXBUF; // copy data to global variable
 
@@ -60,11 +103,11 @@ void interrupt spi_rx_handler(){
 		sendByte('1');
 		state++;
 		break;
-	case 4:		//waiting for #1
+	case 4:		//waiting for #1 (upper byte)
 		sendByte('0');
 		state++;
 		break;
-	case 5:		//receive #1
+	case 5:		//waiting for receive #1
 		sendByte('A');
 		state++;
 		break;
@@ -77,11 +120,11 @@ void interrupt spi_rx_handler(){
 		sendByte('0');
 		state++;
 		break;
-	case 8:		//reive #2
+	case 8:		//waiting for receive #2
 		sendByte('A');
 		state++;
 		break;
-	case 9:{	//sending H/L/E
+	case 9:{	//sending High(H)/Low(L)/Equal(E)
 		unsigned int guess = (foo << 8) + lower;
 		if(guess > answer){
 			sendByte('H');
@@ -105,19 +148,35 @@ void interrupt spi_rx_handler(){
 }
 ISR_VECTOR(spi_rx_handler, ".int07")
 
+interrupt void WDT_interval_handler()
+{
+	// read the BUTTON state
+	short buttonState = (P1IN & BUTTON ? HIGH : LOW);
+	//check if button when from pressed to unpressed
+	//button is active high, so look for change from LOW to HIGH
+	if (lastButtonState == LOW && buttonState == HIGH)
+	{
+		answer = rand();
+		state = 1;
+		sendByte('R');
+	}
+	lastButtonState = buttonState;
+}
+ISR_VECTOR(WDT_interval_handler, ".int10")
+
 void main(){
 
 	WDTCTL = WDTPW + WDTHOLD;       // Stop watchdog timer
 	BCSCTL1 = CALBC1_8MHZ;			// 8Mhz calibration for clock
   	DCOCTL  = CALDCO_8MHZ;
   	init_spi();
+  	init_button();
+  	init_WDT();
 
-  	//generate random number
-  	srand(time(NULL));
-  	answer = rand();
 
-  	sendByte('R');
-  	state = 1;
+  	srand(genRandom());
+
+
 
  	_bis_SR_register(GIE+LPM0_bits);
 }

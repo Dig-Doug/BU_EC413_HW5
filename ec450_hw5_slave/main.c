@@ -24,16 +24,22 @@
 
 volatile unsigned int lastGuess = 0;
 volatile unsigned int step = 0;
+volatile unsigned char nextByteToSend;
+volatile short needSend = 0;
 volatile unsigned char data[50];
-volatile unsigned short dataIndex = 3;
+volatile unsigned char index = 0;
 
 void sendByte(unsigned char aData)
 {
-	UCB0TXBUF = aData;
+	nextByteToSend = aData;
+	needSend = 1;
 }
 
-void init_spi(){
-	UCB0CTL1 = UCSSEL_2+UCSWRST;  		// Reset state machine; SMCLK source;
+void init_spi()
+{
+	// Reset state machine; SMCLK source;
+	UCB0CTL1 = UCSWRST + UCSSEL_2;
+	// Data capture on rising edge, 3-pin SPI mode, sync mode
 	UCB0CTL0 = UCCKPH					// Data capture on rising edge
 			   							// read data while clock high
 										// lsb first, 8 bit mode,
@@ -43,98 +49,91 @@ void init_spi(){
 	UCB0BR1=BRHI;
 	UCB0CTL1 &= ~UCSWRST;				// enable UCB0 (must do this before setting
 										//              interrupt enable and flags)
-	IFG2 &= ~UCB0RXIFG;					// clear UCB0 RX flag
-	IE2 |= UCB0RXIE;					// enable UCB0 RX interrupt
+	// clear UCB0 RX & TX flag
+	IFG2 &= ~UCB0RXIFG;
+	IFG2 &= ~UCB0RXIFG;
+	// enable UCB0 RX & TX interrupt
+	IE2 |= UCB0RXIE;
+	IE2 |= UCB0TXIE;
 	// Connect I/O pins to UCB0 SPI
 	P1SEL |=SPI_CLK+SPI_SOMI+SPI_SIMO;
 	P1SEL2|=SPI_CLK+SPI_SOMI+SPI_SIMO;
 }
 
-interrupt void WDT_interval_handler(){
-	if (--dataIndex==0)
+#pragma vector=USCIAB0RX_VECTOR
+void interrupt spi_rx_handler()
+{
+	volatile unsigned char dataReceived = UCB0RXBUF; // copy data to global variable
+
+	if (dataReceived == STATE_MASTER_READY)
 	{
-		dataIndex = 10;
-
-		unsigned char dataReceived = data[0];
-
-		if (dataReceived == STATE_MASTER_READY)
+		lastGuess = INT_MAX / 2;
+		step = INT_MAX / 4;
+		sendByte(STATE_READY_TO_GUESS);
+	}
+	else if (dataReceived == STATE_GUESS_FIRST_HALF)
+	{
+		unsigned char lowerHalf = lastGuess & 0xFF;
+		sendByte(lowerHalf);
+	}
+	else if (dataReceived == STATE_GUESS_SECOND_HALF)
+	{
+		unsigned char upperHalf = (lastGuess >> 8);
+		sendByte(upperHalf);
+	}
+	else if (dataReceived == STATE_GUESS_HIGH)
+	{
+		if (step == 0)
 		{
-			lastGuess = INT_MAX / 2;
-			step = INT_MAX / 4;
-			sendByte(STATE_READY_TO_GUESS);
-		}
-		else if (dataReceived == STATE_GUESS_FIRST_HALF)
-		{
-			unsigned char upperHalf = (lastGuess >> 8);
-			sendByte(upperHalf);
-		}
-		else if (dataReceived == STATE_GUESS_SECOND_HALF)
-		{
-			unsigned char lowerHalf = lastGuess & 0xFF;
-			sendByte(lowerHalf);
-		}
-		else if (dataReceived == STATE_GUESS_HIGH)
-		{
-			if (step == 0)
-			{
-				lastGuess--;
-			}
-			else
-			{
-				lastGuess -= step;
-				step /= 2;
-			}
-			sendByte(STATE_READY_TO_GUESS);
-		}
-		else if (dataReceived == STATE_GUESS_LOW)
-		{
-			if (step == 0)
-			{
-				lastGuess++;
-			}
-			else
-			{
-				lastGuess += step;
-				step /= 2;
-			}
-			sendByte(STATE_READY_TO_GUESS);
-		}
-		else if (dataReceived == STATE_GUESS_EQUAL)
-		{
-			//DONE!
+			lastGuess--;
 		}
 		else
 		{
-
+			lastGuess -= step;
+			step /= 2;
 		}
+		sendByte(STATE_READY_TO_GUESS);
 	}
-}
-ISR_VECTOR(WDT_interval_handler, ".int10")
+	else if (dataReceived == STATE_GUESS_LOW)
+	{
+		if (step == 0)
+		{
+			lastGuess++;
+		}
+		else
+		{
+			lastGuess += step;
+			step /= 2;
+		}
+		sendByte(STATE_READY_TO_GUESS);
+	}
+	else if (dataReceived == STATE_GUESS_EQUAL)
+	{
+		//DONE!
+	}
+	else
+	{
 
-void init_wdt(){
-	// setup the watchdog timer as an interval timer
-	// INTERRUPT NOT YET ENABLED!
-  	WDTCTL =(WDTPW +		// (bits 15-8) password
-     	                   	// bit 7=0 => watchdog timer on
-       	                 	// bit 6=0 => NMI on rising edge (not used here)
-                        	// bit 5=0 => RST/NMI pin does a reset (not used here)
-           	 WDTTMSEL +     // (bit 4) select interval timer mode
-  		     WDTCNTCL  		// (bit 3) clear watchdog timer counter
-  		                	// bit 2=0 => SMCLK is the source
-  		                	// bits 1-0 = 10=> source/512
- 			 );
-  	IE1 |= WDTIE; // enable WDT interrupt
- }
+	}
 
-
-void interrupt spi_rx_handler()
-{
-	unsigned char dataReceived = UCB0RXBUF; // copy data to global variable
-	data[0] = dataReceived;
 	// clear UCB0 RX flag
 	IFG2 &= ~UCB0RXIFG;
 }
-ISR_VECTOR(spi_rx_handler, ".int07")
+
+#pragma vector=USCIAB0TX_VECTOR
+void interrupt spi_tx_handler()
+{
+	if (needSend)
+	{
+		UCB0TXBUF = 0;
+		UCB0TXBUF = nextByteToSend;
+		needSend = 0;
+	}
+	else
+	{
+		UCB0TXBUF = 0;
+	}
+}
 
 void main(){
 
@@ -145,7 +144,6 @@ void main(){
   	DCOCTL  = CALDCO_8MHZ;
 
   	init_spi();
-  	init_wdt();
 
   	//wait for start
  	_bis_SR_register(GIE+LPM0_bits);

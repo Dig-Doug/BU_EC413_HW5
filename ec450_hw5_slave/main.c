@@ -5,9 +5,9 @@
 #include <limits.h>
 
 //Bit positions in P1 for SPI
-#define SPI_CLK 0x20
-#define SPI_SOMI 0x40
-#define SPI_SIMO 0x80
+#define SPI_CLK 0x20  //5
+#define SPI_SOMI 0x40  //6
+#define SPI_SIMO 0x80  //7
 
 // calculate the lo and hi bytes of the bit rate divisor
 #define BIT_RATE_DIVISOR 32

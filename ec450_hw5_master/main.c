@@ -2,6 +2,8 @@
 
 #include <msp430.h>
 #include <stdlib.h>
+#include "uart_out.h"
+#include <string.h>
 
 //Bit positions in P1 for SPI
 #define SPI_CLK 0x20
@@ -17,8 +19,19 @@
 #define HIGH 	1
 #define BUTTON	BIT3
 
+// Globals for printing
+unsigned int conPrint=500; // number of conversions for each print line
+unsigned int conPrintCounter; // down counter for printing conversions
+unsigned int conPrintSequence;// output line numbers
+// a buffer to construct short text output strings
+#define CBUFLEN 20
+char cbuffer[CBUFLEN] = "1234567891234567891"; // buffer for output of characters
+
+
+//Globals for button
 short lastButtonState = HIGH;
 
+//Globals for game
 volatile unsigned int answer = 30;
 volatile char state = 0;
 volatile unsigned char lower;
@@ -126,6 +139,25 @@ void interrupt spi_rx_handler(){
 		break;
 	case 9:{	//sending High(H)/Low(L)/Equal(E)
 		unsigned int guess = (foo << 8) + lower;
+		//u_print_string("Guess ");
+		int digit = (guess % 10000);
+		cbuffer[0] = '0' + (digit < 10 ? digit : 0);
+		guess /= 10;
+		digit = (guess % 1000);
+		cbuffer[1] = '0' + (digit < 10 ? digit : 0);
+		guess /= 10;
+		digit = (guess % 100);
+		cbuffer[2] = '0' + (digit < 10 ? digit : 0);
+		guess /= 10;
+		digit = (guess % 10);
+		cbuffer[3] = '0' + (digit < 10 ? digit : 0);
+		guess /= 10;
+		cbuffer[4] = '0' + (digit < 10 ? digit : 0);
+		guess /= 10;
+		cbuffer[5] = '\0';
+		tx_start_string(cbuffer);
+		//u_print_string("\n");
+
 		if(guess > answer){
 			sendByte('H');
 			state = 2;
@@ -172,11 +204,16 @@ void main(){
   	init_spi();
   	init_button();
   	init_WDT();
-
-
+  	init_USCI_UART();
   	srand(genRandom());
 
+  	// Setup printing
+  	conPrintCounter=conPrint;
+  	conPrintSequence=1;
+  	_bis_SR_register(GIE); //enable interrupts so we can print.
 
+  	u_print_string("Game:");
+  	u_print_string(cbuffer);
 
- 	_bis_SR_register(GIE+LPM0_bits);
+ 	_bis_SR_register(LPM0_bits);
 }

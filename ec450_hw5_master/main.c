@@ -31,6 +31,7 @@ volatile unsigned int answer = 30;
 volatile char state = 0;
 volatile unsigned char lower;
 volatile unsigned char foo;
+volatile unsigned char nextByteToSend;
 
 void writeString(char *string, const char * aPrint, short length)
 {
@@ -66,7 +67,8 @@ void writeInt(char * string, int aNum)
 
 void sendByte(unsigned char aData)
 {
-	UCB0TXBUF = aData;
+	nextByteToSend = aData;
+	//UCB0TXBUF = aData;
 }
 void init_button(){
 	// Set button as input
@@ -193,14 +195,10 @@ void interrupt spi_rx_handler(){
 		break;
 	}
 
-	if (hasUARTMessage)
-	{
-		//send uart info
-		uartPrint(stringBuffer);
-		hasUARTMessage = 0;
-	}
-
 	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
+
+	// wake up CPU
+	__bic_SR_register_on_exit(CPUOFF);
 }
 ISR_VECTOR(spi_rx_handler, ".int07")
 
@@ -231,5 +229,23 @@ void main(){
 	uartInit();
 	srand(genRandom());
 
-	_bis_SR_register(LPM0_bits + GIE);
+
+	while (1)
+	{
+		//turn off cpu
+		_bis_SR_register(LPM0_bits + GIE);
+
+		if (hasUARTMessage)
+		{
+			//send uart info
+			uartPrint(stringBuffer);
+			hasUARTMessage = 0;
+		}
+
+		__bic_SR_register(GIE);
+
+		UCB0TXBUF = nextByteToSend;
+
+		_bis_SR_register(LPM0_bits + GIE);
+	}
 }

@@ -20,7 +20,7 @@
 #define BUTTON	BIT3
 
 
-short hasUARTMessage = 0;
+volatile short hasUARTMessage = 0;
 char stringBuffer[20];
 
 //Globals for button
@@ -32,15 +32,15 @@ volatile char state = 0;
 volatile unsigned char lower;
 volatile unsigned char foo;
 
-void writeString(char *string, const char * aPrint)
+void writeString(char *string, const char * aPrint, short length)
 {
 	do
 	{
 		*string = *aPrint;
 		string++;
 		aPrint++;
-	}
-	while (aPrint != '\0');
+		length--;
+	}while (length > 0);
 }
 
 void writeInt(char * string, int aNum)
@@ -167,23 +167,23 @@ void interrupt spi_rx_handler(){
 		unsigned int guess = (foo << 8) + lower;
 		hasUARTMessage = 1;
 		if(guess > answer){
-			writeString(&stringBuffer[0], "High:");
+			writeString(&stringBuffer[0], "High:", 5);
 			writeInt(&stringBuffer[5], guess);
-			writeString(&stringBuffer[10], "\r\n");
+			writeString(&stringBuffer[10], "\r\n", 3);
 			sendByte('H');
 			state = 2;
 		}
 		else if (guess < answer){
-			writeString(&stringBuffer[0], "Low:");
+			writeString(&stringBuffer[0], "Low:", 4);
 			writeInt(&stringBuffer[4], guess);
-			writeString(&stringBuffer[9], "\r\n");
+			writeString(&stringBuffer[9], "\r\n", 3);
 			sendByte('L');
 			state = 2;
 		}
 		else{
-			writeString(&stringBuffer[0], "Equal:");
+			writeString(&stringBuffer[0], "Equal:", 6);
 			writeInt(&stringBuffer[6],  guess);
-			writeString(&stringBuffer[11], "\r\n");
+			writeString(&stringBuffer[11], "\r\n", 3);
 			sendByte('E');
 			state = 0;
 		}

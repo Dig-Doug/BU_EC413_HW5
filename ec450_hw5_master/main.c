@@ -32,6 +32,7 @@ volatile char state = 0;
 volatile unsigned char lower;
 volatile unsigned char foo;
 volatile unsigned char nextByteToSend;
+volatile char playing = 0;
 
 void writeString(char *string, const char * aPrint, short length)
 {
@@ -134,6 +135,8 @@ void interrupt spi_rx_handler(){
 	switch(state){
 	case 1:		//sending R
 		sendByte('R');
+		hasUARTMessage = 1;
+		writeString(&stringBuffer[0], "Game Start \r\n", 13);
 		state++;
 		break;
 	case 2:		//waiting for G
@@ -187,6 +190,7 @@ void interrupt spi_rx_handler(){
 			writeInt(&stringBuffer[6],  guess);
 			writeString(&stringBuffer[11], "\r\n", 3);
 			sendByte('E');
+			playing = 0;
 			state = 0;
 		}
 		break;
@@ -196,6 +200,8 @@ void interrupt spi_rx_handler(){
 	}
 
 	IFG2 &= ~UCB0RXIFG;		 // clear UCB0 RX flag
+	IE2 &= ~UCB0RXIE;
+	UCB0TXBUF = nextByteToSend;
 
 	// wake up CPU
 	__bic_SR_register_on_exit(CPUOFF);
@@ -208,11 +214,12 @@ interrupt void WDT_interval_handler()
 	short buttonState = (P1IN & BUTTON ? HIGH : LOW);
 	//check if button when from pressed to unpressed
 	//button is active high, so look for change from LOW to HIGH
-	if (lastButtonState == LOW && buttonState == HIGH)
+	if (lastButtonState == LOW && buttonState == HIGH && playing == 0)
 	{
 		answer = rand();
 		state = 1;
-		sendByte('R');
+		playing = 1;
+		UCB0TXBUF = 'R';
 	}
 	lastButtonState = buttonState;
 }
@@ -229,12 +236,9 @@ void main(){
 	uartInit();
 	srand(genRandom());
 
-
-	while (1)
+	while(1)
 	{
-		//turn off cpu
 		_bis_SR_register(LPM0_bits + GIE);
-
 		if (hasUARTMessage)
 		{
 			//send uart info
@@ -243,9 +247,8 @@ void main(){
 		}
 
 		__bic_SR_register(GIE);
+		IE2 |= UCB0RXIE;
 
-		UCB0TXBUF = nextByteToSend;
-
-		_bis_SR_register(LPM0_bits + GIE);
 	}
+
 }

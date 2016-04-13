@@ -1,4 +1,11 @@
-//SLAVE
+/*
+ * main.c
+*
+ *  Created on: Apr 7, 2016
+ *      Authors: Doug Roeper, Philip Yuan
+ *
+ *  Based on examples from Prof. Giles
+ */
 
 #include <msp430.h>
 

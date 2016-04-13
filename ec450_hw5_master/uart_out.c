@@ -2,7 +2,9 @@
  * uart_out.c
  *
  *  Created on: Apr 7, 2016
- *      Author: black
+ *      Authors: Doug Roeper, Philip Yuan
+ *
+ *  Based on examples from Prof. Giles
  */
 
 #include "uart_out.h"
@@ -11,28 +13,14 @@
 #include <string.h>
 #include <stdio.h>
 
-/*
- * UART Timing Parameters
- * The UART will be driven by the SMCLK at 8Mhz
- * The desired baudrate in this example is 9600
- */
 #define SMCLKRATE 8000000
 #define BAUDRATE 9600
-/*
- * calculate the prescalar and "modulation":
- * prescaler = CLOCK/baudrate
- * BRDIV = integer part of prescalar
- * modulation = Round (8* fractional part of prescaler)
- *
- */
 #define BRDIV16 ((16*SMCLKRATE)/BAUDRATE)
 #define BRDIV (BRDIV16/16)
 #define BRMOD ((BRDIV16-(16*BRDIV)+1)/16)
 #define BRDIVHI (BRDIV/256)
 #define BRDIVLO (BRDIV-BRDIVHI*256)
 
-//Port 1 pins used for transmit and receive are P1.2 and P1.1
-// (receive is not actually used in this example)
 #define TXBIT 0x04
 #define RXBIT 0x02
 

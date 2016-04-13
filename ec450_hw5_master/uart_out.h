@@ -2,7 +2,9 @@
  * uart_out.h
  *
  *  Created on: Apr 7, 2016
- *      Author: black
+ *      Authors: Doug Roeper, Philip Yuan
+ *
+ *  Based on examples from Prof. Giles
  */
 
 #ifndef UART_OUT_H_

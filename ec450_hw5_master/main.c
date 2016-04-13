@@ -1,5 +1,11 @@
-// MASTER
-
+/*
+ * main.c
+ *
+ *  Created on: Apr 7, 2016
+ *      Authors: Doug Roeper, Philip Yuan
+ *
+ *  Based on examples from Prof. Giles
+ */
 #include <msp430.h>
 #include <stdlib.h>
 #include "uart_out.h"

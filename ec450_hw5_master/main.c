@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "uart_out.h"
 #include <string.h>
+#include <time.h>
 
 //Bit positions in P1 for SPI
 #define SPI_CLK 0x20
@@ -19,6 +20,7 @@
 #define HIGH 	1
 #define BUTTON	BIT3
 
+#define RED_LED BIT0
 
 volatile short hasUARTMessage = 0;
 char stringBuffer[20];
@@ -107,28 +109,6 @@ void init_spi(){
 	P1SEL2|=SPI_CLK+SPI_SOMI+SPI_SIMO;
 }
 
-int genRandom() {
-
-	TA0CTL |= TACLR;            // reset clock
-	TA0CTL = TASSEL_2+ID_0+MC_1;// clock source = SMCLK
-	// clock divider=1
-	// UP mode
-	// timer A interrupt off
-	// compare mode, output mode 0, no interrupt enabled
-	TA0CCTL0=0;
-	TA0CCR0 = -1;
-
-	volatile int i = 0;
-	while (i < 1000) {
-		i++;
-	}
-
-	int result = TAR;
-	TA0CTL |= TACLR;
-
-	return result;
-}
-
 void interrupt spi_rx_handler(){
 	foo = UCB0RXBUF; // copy data to global variable
 
@@ -192,6 +172,10 @@ void interrupt spi_rx_handler(){
 			sendByte('E');
 			playing = 0;
 			state = 0;
+			//turn led off
+			P1OUT &= ~RED_LED;
+			//turn on watchdog for button
+			IE1 |= WDTIE;
 		}
 		break;
 	}
@@ -220,6 +204,10 @@ interrupt void WDT_interval_handler()
 		state = 1;
 		playing = 1;
 		UCB0TXBUF = 'R';
+		//turn led on
+		P1OUT |= RED_LED;
+		//turn off watchdog
+		IE1 &= WDTIE;
 	}
 	lastButtonState = buttonState;
 }
@@ -234,7 +222,14 @@ void main(){
 	init_button();
 	init_WDT();
 	uartInit();
-	srand(genRandom());
+
+	//output to led
+	P1DIR |= RED_LED;
+
+	//turn led off
+	P1OUT &= ~RED_LED;
+
+	srand(time(NULL));
 
 	while(1)
 	{

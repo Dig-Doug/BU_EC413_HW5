@@ -32,12 +32,13 @@ short lastButtonState = HIGH;
 volatile unsigned int answer = 30;
 volatile char state = 0;
 volatile unsigned char lower;
-volatile unsigned char foo;
+volatile unsigned char receivedByte;
 volatile unsigned char nextByteToSend;
 volatile char playing = 0;
 
 void writeString(char *string, const char * aPrint, short length)
 {
+	//copied the string into the string buffer
 	do
 	{
 		*string = *aPrint;
@@ -49,6 +50,8 @@ void writeString(char *string, const char * aPrint, short length)
 
 void writeInt(char * string, int aNum)
 {
+	//reads the number and writes each digit to the string buffer
+	//terminates with a null character
 	string[5] = '\0';
 	int digit = aNum % 10;
 	string[4] = '0' + digit;
@@ -67,9 +70,9 @@ void writeInt(char * string, int aNum)
 	aNum /= 10;
 }
 
-
 void sendByte(unsigned char aData)
 {
+	//queues the byte to send
 	nextByteToSend = aData;
 	//UCB0TXBUF = aData;
 }
@@ -110,7 +113,7 @@ void init_spi(){
 }
 
 void interrupt spi_rx_handler(){
-	foo = UCB0RXBUF; // copy data to global variable
+	receivedByte = UCB0RXBUF; // copy data to global variable
 
 	switch(state){
 	case 1:		//sending R
@@ -136,7 +139,7 @@ void interrupt spi_rx_handler(){
 		state++;
 		break;
 	case 6:		//sending 2
-		lower = foo;
+		lower = receivedByte;
 		sendByte('2');
 		state++;
 		break;
@@ -149,7 +152,7 @@ void interrupt spi_rx_handler(){
 		state++;
 		break;
 	case 9:{	//sending High(H)/Low(L)/Equal(E)
-		unsigned int guess = (foo << 8) + lower;
+		unsigned int guess = (receivedByte << 8) + lower;
 		hasUARTMessage = 1;
 		if(guess > answer){
 			writeString(&stringBuffer[0], "High:", 5);
